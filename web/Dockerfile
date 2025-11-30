@@ -1,7 +1,7 @@
 FROM emscripten/emsdk:3.1.56
 
 WORKDIR /work
-COPY . /work
+COPY .. /work
 
 # Build the WebAssembly module into /public. This image build itself produces the artifacts,
 # but for iterative local builds on Windows, prefer using compile.bat which mounts the repo.
