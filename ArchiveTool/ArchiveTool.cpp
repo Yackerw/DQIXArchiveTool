@@ -1,11 +1,13 @@
 #include "gp2.h"
 #include "CompressA.h"
 
-int main(int argc, char** argv)
+#define EXEC_MODE 0
+
+void decomp_mode(int argc, char** argv)
 {
     if (argc <= 1) {
         printf("Drag a file to decompress onto exe!");
-        return 0;
+        return;
     }
     GP2File *file = GP2File::ReadFile(argv[1]);
     if (file == NULL) {
@@ -13,7 +15,7 @@ int main(int argc, char** argv)
         if (f->IsValid() == false) {
             delete f;
             printf("Couldn't open file!");
-            return 0;
+            return;
         }
         // try to detect if it uses the standard GP2 compression header
         uint32_t header = f->ReadUInt32();
@@ -37,7 +39,7 @@ int main(int argc, char** argv)
         if (fi == NULL) {
             printf("Couldn't open output file!");
             delete[] out;
-            return 0;
+            return;
         }
         fwrite(out, decompFileSize, 1, fi);
         fclose(fi);
@@ -46,4 +48,18 @@ int main(int argc, char** argv)
     else {
         delete file;
     }
+}
+
+
+
+int main(int argc, char** argv) {
+#if EXEC_MODE == 0
+    decomp_mode(argc, argv);
+#elif EXEC_MODE == 1
+    comp_mode(argc, argv);
+#elif EXEC_MODE == 2
+    comp_mon_mode(argc, argv);
+#endif
+
+    return 0;
 }

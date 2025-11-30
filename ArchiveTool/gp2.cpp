@@ -4,6 +4,10 @@
 #include "CompressC.h"
 #include <stdexcept>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 struct FileEntry {
 	uint32_t hash;
@@ -125,6 +129,12 @@ bool GP2File::ParseFile() {
 	delete[] fileInfoTree;
 	delete[] fileNamesLinear;
 	delete f;
+
+	struct stat sb;
+
+	if (stat("export", &sb) != 0) {
+		fs::create_directory("export");
+	}
 
 	for (uint32_t i = 0; i < fileCount; ++i) {
 		char fileNames[256];
