@@ -1,5 +1,4 @@
 // GP2 Web UI logic (no network IO; everything local)
-
 (function(){
   'use strict';
 
@@ -11,12 +10,8 @@
   const btnClearExport = byId('btnClearExport');
   const btnClearLog = byId('btnClearLog');
   const btnSaveLog = byId('btnSaveLog');
-
-  function humanSize(n){
-    if (n < 1024) return n + ' B';
-    if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
-    return (n/1024/1024).toFixed(1) + ' MB';
-  }
+  const selTheme = byId('selTheme');
+  const selLang = byId('selLang');
 
   function sanitizeName(name){
     return (name||'').replace(/\\/g,'/').replace(/\.+\//g,'').replace(/^\/+/, '');
@@ -83,7 +78,8 @@
     fileList.innerHTML = '';
     if (!files.length){
       fileList.classList.add('empty');
-      fileList.textContent = 'まだ出力はありません';
+      fileList.setAttribute('data-i18n','noOut');
+      fileList.textContent = t('noOut');
       btnZipAll.disabled = true;
       return;
     }
@@ -94,22 +90,146 @@
     for (const f of files){
       const li = document.createElement('li');
       li.className = 'list-item';
+      // Expander or spacer
+      const expWrap = document.createElement('div');
+      expWrap.className = 'expander';
+      const isNarcFile = isNarc(f.path);
+      let narcState = { decoded: false, entries: null, container: null };
+      if (isNarcFile){
+        const btnExp = document.createElement('button');
+        btnExp.setAttribute('aria-label', t('expand'));
+        const chev = document.createElement('span');
+        chev.className = 'chev';
+        chev.textContent = '>';
+        btnExp.appendChild(chev);
+        btnExp.addEventListener('click', async ()=>{
+          const expanded = li.classList.toggle('expanded');
+          btnExp.setAttribute('aria-label', expanded? t('collapse'): t('expand'));
+          if (expanded){
+            if (!narcState.decoded){
+              // Decode once
+              const entries = await decodeNarc(f.path);
+              narcState.decoded = true;
+              narcState.entries = entries;
+            }
+            if (!narcState.container){
+              narcState.container = renderNarcContents(narcState.entries, f.path);
+              li.appendChild(narcState.container);
+            } else {
+              narcState.container.classList.remove('hidden');
+            }
+          } else {
+            if (narcState.container) narcState.container.classList.add('hidden');
+          }
+        });
+        expWrap.appendChild(btnExp);
+      } else {
+        const spacer = document.createElement('div');
+        spacer.style.minWidth = '24px';
+        spacer.setAttribute('aria-hidden','true');
+        expWrap.appendChild(spacer);
+      }
+
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = f.path.replace(/^\/export\//,'');
       const size = document.createElement('span');
       size.className = 'size';
-      size.textContent = humanSize(f.size);
+      size.textContent = f.size;
       const btn = document.createElement('button');
-      btn.textContent = 'ダウンロード';
+      btn.textContent = t('download');
       btn.className = 'btn';
       btn.addEventListener('click', ()=> downloadFile(f.path));
+      // Per-NARC: all download button
+      const btnAll = document.createElement('button');
+      btnAll.textContent = t('downloadAll');
+      btnAll.className = 'btn';
+      btnAll.style.display = isNarcFile? '' : 'none';
+      btnAll.disabled = false; // will decode on demand
+      btnAll.addEventListener('click', async ()=>{
+        const entries = await decodeNarc(f.path);
+        const pairs = entries.map(e=>({ name: e.name, data: e.data }));
+        const zipU8 = buildZipStore(pairs);
+        const blob = new Blob([zipU8], {type:'application/zip'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        const base = (name.textContent||'narc').replace(/\.[^./\\]+$/,'');
+        a.download = base + '.narc.zip';
+        document.body.appendChild(a);
+        a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+      });
+      li.appendChild(expWrap);
       li.appendChild(name);
       li.appendChild(size);
       li.appendChild(btn);
+      li.appendChild(btnAll);
       ul.appendChild(li);
     }
     fileList.appendChild(ul);
+  }
+
+  // NARC helpers
+  const narcCache = new Map(); // path -> [{name,data(U8)}]
+  function isNarc(path){
+    try{
+      const u8 = Module.FS.readFile(path);
+      return u8.length >= 4 && u8[0]===0x4E && u8[1]===0x41 && u8[2]===0x52 && u8[3]===0x43; // 'NARC'
+    }catch(_){ return false; }
+  }
+  function sanitizeZipName(name){
+    return (name||'file.bin').replace(/^[\\/]+/,'').replace(/\.+\//g,'');
+  }
+  async function decodeNarc(path){
+    if (narcCache.has(path)) return narcCache.get(path);
+    const data = Module.FS.readFile(path);
+    let entries = [];
+    try{
+      const narc = Narc.load(data);
+      for (let i=0;i<narc.files.length;i++){
+        const nm = narc.fnt.getFilenameOf(i) || ('file'+i+'.bin');
+        const safe = sanitizeZipName(nm);
+        const bytes = narc.files[i];
+        entries.push({ name: safe, data: bytes });
+      }
+    }catch(e){
+      console.error('NARC decode failed:', e);
+    }
+    narcCache.set(path, entries);
+    return entries;
+  }
+
+  function renderNarcContents(entries, parentPath){
+    const wrap = document.createElement('div');
+    wrap.className = 'narc-contents';
+    const list = document.createElement('ul');
+    list.className = 'narc-list';
+    for (const e of entries){
+      const row = document.createElement('li');
+      row.className = 'narc-row';
+      const nm = document.createElement('span');
+      nm.textContent = e.name;
+      const sz = document.createElement('span');
+      sz.className = 'size';
+      sz.textContent = e.data.length;
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = t('download');
+      b.addEventListener('click', ()=>{
+        const blob = new Blob([e.data], {type:'application/octet-stream'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = e.name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+      });
+      row.appendChild(nm);
+      row.appendChild(sz);
+      row.appendChild(b);
+      list.appendChild(row);
+    }
+    wrap.appendChild(list);
+    return wrap;
   }
 
   function crc32(buf){
@@ -273,11 +393,26 @@
       a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
     });
+    if (selTheme){
+      selTheme.addEventListener('change', ()=>{
+        try{ localStorage.setItem('ui.theme', selTheme.value); }catch(_){ }
+        document.documentElement.setAttribute('data-theme', getTheme());
+      });
+    }
+    if (selLang){
+      selLang.addEventListener('change', ()=>{
+        try{ localStorage.setItem('ui.lang', selLang.value); }catch(_){ }
+        document.documentElement.setAttribute('lang', getLang());
+        applyThemeAndLangUI();
+        refreshExportList();
+      });
+    }
   }
 
   window.appInit = function(){
     try { Module.FS.mkdir('/input'); } catch(_) {}
     try { Module.FS.mkdir('/export'); } catch(_) {}
+    applyThemeAndLangUI();
     setupDnD();
     setupActions();
     refreshExportList();

@@ -1,13 +1,124 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GP2 Decompiler (Non‑Commercial)</title>
-  <link rel="stylesheet" href="style.css">
   <meta name="description" content="Local, in‑browser GP2 decompiler. No uploads.">
   <script>
-    // Capture stdout/stderr from C++
+    // Blocking theme/lang boot (no FOUC)
+    function applyThemeAndLangUI(){
+      try{
+        var ls=localStorage;
+        var theme=ls.getItem('ui.theme')||'auto';
+        var lang=ls.getItem('ui.lang')||'auto';
+        function detectTheme(){
+          return (matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        }
+        function detectLang(){
+          var n=(navigator.language||'ja').toLowerCase();
+          return n.startsWith('ja')? 'ja' : 'en';
+        }
+        document.documentElement.setAttribute('data-theme', theme==='auto'? detectTheme(): theme);
+        document.documentElement.setAttribute('lang', lang==='auto'? detectLang(): lang);
+        document.getElementById('selTheme').value=theme;
+        document.getElementById('selLang').value=lang;
+      }catch(e){}
+    }
+
+    function getLang(){
+        return localStorage.getItem('ui.lang')||'auto';
+    }
+    function setLang(lang){
+        localStorage.setItem('ui.lang', lang);
+    }
+
+    function getTheme(){
+        return localStorage.getItem('ui.theme')||'auto';
+    }
+    function setTheme(theme){
+        localStorage.setItem('ui.theme', theme);
+    }
+
+    applyThemeAndLangUI();
+  </script>
+  <style>
+    :root{ --bg:#0e0f12; --fg:#e7e9ee; --muted:#9aa3b2; --acc:#4aa3ff; --panel:#171922; --hover:#212636; --ok: #528d59; --warn:#ffb020; --err:#ff6464; }
+    :root[data-theme="dark"]{ --bg:#0e0f12; --fg:#e7e9ee; --muted:#9aa3b2; --acc:#4aa3ff; --panel:#171922; --hover:#212636; --ok:#39d353; }
+    :root[data-theme="deepdark"]{ --bg:#05060a; --fg:#e9ecf6; --muted:#9aa3b2; --acc:#3c89ff; --panel:#0a0b10; --hover:#141722; --ok:#39d353; }
+    :root[data-theme="light"]{ --bg:#ffffff; --fg:#15171a; --muted:#6b7280; --acc:#1d4ed8; --panel:#f3f4f6; --hover:#e5e7eb; }
+    :root[data-theme="gray"]{ --bg:#1b1d22; --fg:#e6e7ea; --muted:#a6adba; --acc:#60a5fa; --panel:#23262d; --hover:#2b3038; --ok: #528d59; }
+    :root[data-theme="lightgray"]{ --bg:#f7f7f8; --fg:#20222a; --muted:#717784; --acc:#2563eb; --panel:#ececef; --hover:#e1e1e6; --ok: #528d59; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    header{display:flex;align-items:center;gap:16px;padding:16px 20px;border-bottom:1px solid #222;flex-wrap:wrap}
+    h1{font-size:18px;margin:0;flex:1}
+    #status{color:var(--ok);font-weight:600}
+    .hdr-controls{display:flex;gap:8px;align-items:center}
+    select{background:var(--panel);;color:var(--fg);border:1px solid var(--bg); border-radius:8px;padding:6px 8px}
+    main{max-width:980px;margin:20px auto;padding:0 16px;display:grid;gap:16px}
+    .panel{background:var(--panel);border:1px solid #222;border-radius:10px;padding:16px}
+    .dropzone{border:2px dashed #3a4053;border-radius:10px;padding:24px;text-align:center;color:var(--muted);cursor:pointer;transition:.2s}
+    .dropzone.hover{background:var(--hover);border-color:var(--acc);color:var(--fg)}
+    .file-label{color:var(--acc);text-decoration:underline; cursor:pointer}
+    .actions{display:flex;gap:8px;margin-top:10px}
+    button.btn, .actions>button{background:var(--panel);color:var(--fg);border:1px solid var(--bg);border-radius:8px;padding:8px 12px;cursor:pointer}
+    button.btn:hover, .actions>button:hover{background:var(--hover)}
+    .file-list.empty{color:var(--muted)}
+    .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+    .list-item{display:grid;grid-template-columns:28px 1fr auto auto auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--hover);border-radius:8px}
+    .list-item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .list-item .size{color:var(--muted)}
+    .expander{position:relative;display:flex;align-items:center;justify-content:center;height:100%;}
+    .expander button{position:relative;display:inline-flex;align-items:center;justify-content:center;width:24px;height:100%;padding:0 4px;cursor:pointer;background:transparent;border:0;color:var(--fg)}
+    .expander button::after{content:'';position:absolute;left:-10%;top:0;width:120%;height:100%}
+    .expander .chev{display:inline-block;transition:transform .15s}
+    .list-item.expanded .expander .chev{transform:rotate(90deg)}
+    .narc-contents{grid-column:1/-1;background:rgba(0,0,0,0.05);border-radius:8px;padding:8px;margin-top:6px}
+    .narc-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+    .narc-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 8px;border:1px dashed var(--acc);border-radius:6px}
+    .log{width:100%;height:180px;background:var(--panel);color:var(--fg);border:1px solid var(--acc);border-radius:8px;padding:10px;font-family:ui-monospace,Consolas,Monaco,Menlo,monospace}
+    footer{max-width:980px;margin:0 auto 40px;padding:0 16px;color:var(--muted)}
+    .hidden{display:none}
+
+    a:active {
+        color: var(--muted);
+    }
+  </style>
+  <script>
+    // Provide BinReader used by narc.js
+    class BinWriter {
+        constructor(){ this.a = []; }
+        putByte(v){ this.a.push(v & 0xFF); }
+        putLShort(v){ this.a.push(v & 0xFF, (v>>>8) & 0xFF); }
+        putLInt(v){
+            this.a.push(v & 0xFF, (v>>>8)&0xFF, (v>>>16)&0xFF, (v>>>24)&0xFF);
+        }
+        putBytes(bytes){ for(const b of bytes) this.a.push(b); }
+        putAscii(str){ for(const b of new TextEncoder().encode(str)) this.a.push(b); }
+        align(n, pad=0){ while(this.a.length % n) this.a.push(pad); }
+        toUint8(){ return Uint8Array.from(this.a); }
+        get length(){ return this.a.length; }
+    }
+    class BinReader {
+        constructor(bytes){ this.b = bytes; this.o = 0; }
+        get eof(){ return this.o >= this.b.length; }
+        getByte(){ return this.b[this.o++]; }
+        getLShort(){ const v = this.b[this.o] | (this.b[this.o+1]<<8); this.o+=2; return v>>>0; }
+        getLInt(){
+            const v = (this.b[this.o] | (this.b[this.o+1]<<8) | (this.b[this.o+2]<<16) | (this.b[this.o+3]<<24))>>>0;
+            this.o+=4; return v;
+        }
+        skip(n){ this.o += n; }
+        slice(n){ const out = this.b.slice(this.o, this.o+n); this.o += n; return out; }
+        readString(n){ return new TextDecoder().decode(this.slice(n)); }
+        getPos(){ return this.o; }
+        setPos(p){ this.o = p; }
+    }
+  </script>
+  <script>
+    // Capture stdout/stderr from C++ and boot app
     var Module = {
       print: (function() {
         return function(text) {
@@ -27,47 +138,214 @@
       }
     };
   </script>
+<script>
+    // --- ローカライズ基盤 (追加) ---
+    (function(){
+        const translations = {
+            ja: {
+                title: "GP2 Decompiler (WebAssembly, 非商用)",
+                theme: "テーマ",
+                lang: "言語",
+                drop: "ここに GP2 もしくは対応ファイルをドラッグ＆ドロップ",
+                or: "または",
+                choose: "ファイルを選択",
+                clearExport: "/export をクリア",
+                zipAll: "すべてZIPでダウンロード",
+                outTitle: "出力ファイル一覧",
+                noOut: "まだ出力はありません",
+                logTitle: "sprintf デバッガ / ログ",
+                clearLog: "ログをクリア",
+                saveLog: "ログを保存",
+                note: "すべての処理はブラウザ内で行われ、外部へ送信されません。非商用目的でのみ使用してください。",
+                expand: "展開",
+                collapse: "折りたたむ",
+                download: "ダウンロード",
+                downloadAll: "すべてダウンロード",
+                auto: "自動",
+                ja: "日本語",
+                en: "English",
+                light: "ライト",
+                dark: "ダーク",
+                deep: "ディープダーク",
+                gray: "グレー",
+                lightgray: "ライトグレー"
+            },
+            en: {
+                title: "GP2 Decompiler (WebAssembly, Non-Commercial)",
+                theme: "Theme",
+                lang: "Language",
+                drop: "Drag & drop GP2 or supported files here",
+                or: "or",
+                choose: "choose files",
+                clearExport: "Clear /export",
+                zipAll: "Download all as ZIP",
+                outTitle: "Output files",
+                noOut: "No output yet",
+                logTitle: "sprintf debugger / log",
+                clearLog: "Clear log",
+                saveLog: "Save log",
+                note: "All processing happens in-browser; nothing is uploaded. For non-commercial use only.",
+                expand: "Expand",
+                collapse: "Collapse",
+                download: "Download",
+                downloadAll: "Download all",
+                auto: "Automatic",
+                ja: "日本語",
+                en: "English",
+                light: "Light",
+                dark: "Dark",
+                deep: "Deep Dark",
+                gray: "Gray",
+                lightgray: "Light Gray",
+            }
+        };
+
+        function resolveLangCode(lang){
+            if(!lang || lang === 'auto'){
+                const n = (navigator.language || 'ja').toLowerCase();
+                return n.startsWith('ja') ? 'ja' : 'en';
+            }
+            return (lang === 'ja' || lang === 'en') ? lang : 'en';
+        }
+
+        // getLang が index.html 内に定義済みのため、可能ならそれを使う（存在しない場合はlocalStorage参照）
+        function localGetLang(){
+            try{
+                if(typeof getLang === 'function') return getLang();
+            }catch(_){}
+            try{ return localStorage.getItem('ui.lang') || 'auto'; }catch(_){ return 'auto'; }
+        }
+
+        function lookup(tobj, path){
+            const parts = path.split('.');
+            let cur = tobj;
+            for(const p of parts){
+                if(cur === undefined || cur === null) return undefined;
+                cur = cur[p];
+            }
+            return cur;
+        }
+
+        window.t = function(key){
+            const lang = resolveLangCode(localGetLang());
+            const tr = translations[lang] || translations.en;
+            // try direct key
+            let v = lookup(tr, key);
+            if(v !== undefined) return String(v);
+            // if top-level and key contains '.', try nested on top-level group (backwards compat)
+            // fallback: try en
+            v = lookup(translations.en, key);
+            if(v !== undefined) return String(v);
+            // 最終フォールバックは key 自体
+            return String(key);
+        };
+
+        // DOM の data-i18n を走査して反映する（テキスト or placeholder / option など）
+        window.applyLocalization = function(root){
+            const ctx = root || document;
+            // elements with data-i18n
+            const els = ctx.querySelectorAll('[data-i18n]');
+            for(const el of els){
+                const key = el.getAttribute('data-i18n');
+                if(!key) continue;
+                const txt = t(key);
+                // special-case: option elements -> textContent
+                if(el.tagName.toLowerCase() === 'option'){
+                    el.textContent = txt;
+                    continue;
+                }
+                // if input/textarea and has placeholder attr originally, support data-i18n-placeholder too
+                if(el.hasAttribute('data-i18n-placeholder')){
+                    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+                    continue;
+                }
+                // default: set textContent
+                el.textContent = txt;
+            }
+            // update document.title if title key exists
+            try{
+                const titleKey = document.querySelector('[data-i18n="title"]') ? 'title' : null;
+                if(titleKey) document.title = t('title');
+            }catch(_){}
+        };
+
+        // initial application (ページ解析直後に呼ばれる deferred スクリプト実行前でも安全)
+        document.addEventListener('DOMContentLoaded', ()=> applyLocalization());
+
+        // さらに、言語セレクトがある場合は変更時に反映
+        document.addEventListener('change', (e)=>{
+            const el = e.target;
+            if(!el) return;
+            if(el.id === 'selLang'){
+                // 少し遅らせて再適用（localStorage は既に更新されている想定）
+                setTimeout(()=> applyLocalization(), 0);
+            }
+        });
+    })();
+    // --- ローカライズ基盤 (追加) ---
+</script>
+  <script src="narc.js" defer></script>
   <script src="gp2.js" defer></script>
   <script src="app.js" defer></script>
+  <!-- Non-commercial notice: This UI is for non‑commercial use only. -->
   <style>
-    /* Fallback if CSS not loaded */
+    /* Additional minimal fallback */
     .hidden { display:none; }
   </style>
-  <!-- Non-commercial notice: This UI is for non‑commercial use only. -->
 </head>
 <body>
   <header>
-    <h1>GP2 Decompiler (WebAssembly, Non‑Commercial)</h1>
+    <h1 data-i18n="title">GP2 Decompiler (WebAssembly, Non‑Commercial)</h1>
+    <div class="hdr-controls">
+      <label><span id="theme" data-i18n="theme">テーマ</span>:
+        <select id="selTheme">
+          <option value="auto" data-i18n="auto">自動</option>
+          <option value="light" data-i18n="light">ライト</option>
+          <option value="dark" data-i18n="dark">ダーク</option>
+          <option value="deepdark" data-i18n="deep">ディープダーク</option>
+          <option value="gray" data-i18n="gray">グレー</option>
+          <option value="lightgray" data-i18n="lightgray">ライトグレー</option>
+        </select>
+      </label>
+      <label><span data-i18n="lang">言語</span>:
+        <select id="selLang">
+          <option value="auto" data-i18n="auto">自動</option>
+          <option value="ja" data-i18n="ja">日本語</option>
+          <option value="en" data-i18n="en">English</option>
+        </select>
+      </label>
+    </div>
     <div id="status">Loading...</div>
   </header>
   <main>
     <section class="panel">
       <div id="dropzone" class="dropzone" tabindex="0">
-        <p>ここに GP2 もしくは対応ファイルをドラッグ＆ドロップ</p>
-        <p>または <label class="file-label"><input id="fileInput" type="file" multiple>ファイルを選択</label></p>
+        <p data-i18n="drop">ここに GP2 もしくは対応ファイルをドラッグ＆ドロップ</p>
+        <p data-i18n="or">または <label class="file-label"><input id="fileInput" type="file" multiple data-i18n="choose">ファイルを選択</label></p>
       </div>
       <div class="actions">
-        <button id="btnClearExport" type="button">/export をクリア</button>
-        <button id="btnZipAll" type="button" disabled>すべてZIPでダウンロード</button>
+        <button id="btnClearExport" type="button" data-i18n="clearExport">/export をクリア</button>
+        <button id="btnZipAll" type="button" disabled data-i18n="zipAll">すべてZIPでダウンロード</button>
       </div>
     </section>
 
     <section class="panel">
-      <h2>出力ファイル一覧</h2>
-      <div id="fileList" class="file-list empty">まだ出力はありません</div>
+      <h2 data-i18n="outTitle">出力ファイル一覧</h2>
+      <div id="fileList" class="file-list empty" data-i18n="noOut">まだ出力はありません</div>
     </section>
 
     <section class="panel">
-      <h2>sprintf デバッガ / ログ</h2>
+      <h2 data-i18n="logTitle">sprintf デバッガ / ログ</h2>
       <textarea id="log" class="log" spellcheck="false" placeholder="C++ の printf / fprintf(stderr, ...) 出力がここに表示されます"></textarea>
       <div class="actions">
-        <button id="btnClearLog" type="button">ログをクリア</button>
-        <button id="btnSaveLog" type="button">ログを保存</button>
+        <button id="btnClearLog" type="button" data-i18n="clearLog">ログをクリア</button>
+        <button id="btnSaveLog" type="button" data-i18n="saveLog">ログを保存</button>
       </div>
     </section>
   </main>
   <footer>
-    <small>すべての処理はブラウザ内で行われ、外部へ送信されません。非商用目的でのみ使用してください。</small>
+    <small data-i18n="note">すべての処理はブラウザ内で行われ、外部へ送信されません。非商用目的でのみ使用してください。</small>
+    <small>originalcode by Yacker <a style="color: var(--muted); " href="https://github.com/Yackerw/DQIXArchiveTool">https://github.com/Yackerw/DQIXArchiveTool</a></small>
   </footer>
 </body>
 </html>
