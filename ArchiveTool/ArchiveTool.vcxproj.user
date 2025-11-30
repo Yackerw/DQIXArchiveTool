@@ -7,6 +7,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\x64\Debug\</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>d_a000.nsbmd</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>dbg_quest_repack</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

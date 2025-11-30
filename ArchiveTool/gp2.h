@@ -23,16 +23,26 @@ protected:
 	};
 
 	GP2File() {
-
+		f = NULL;
+		files = NULL;
+		fileCount = 0;
+		header = { 0 };
 	}
 
 	struct GP2Header header;
 
 	FileReader* f;
 	GP2FileStorage** files;
+	uint32_t fileCount;
 
 	bool ParseFile();
+	void CreateFromFiles(GP2FileStorage* files, uint32_t fileCount);
 public:
 	static GP2File *ReadFile(const char *fileName);
 	static uint8_t* DecompressSelection(FileReader* f, uint32_t fileEnd);
+	static GP2File *CreateFromDirectory(const char* dirName);
+
+	static uint32_t HashKey[256];
+
+	void SaveArchive(const char* fileName);
 };

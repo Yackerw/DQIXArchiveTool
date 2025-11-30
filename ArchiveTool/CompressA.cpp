@@ -1,4 +1,5 @@
 #include "CompressA.h"
+#include <vector>
 
 uint8_t* DecompressA(FileReader* f, uint32_t decompressedSize, uint32_t compressedEnd) {
     uint8_t* dcmp = new uint8_t[decompressedSize]();
@@ -19,7 +20,7 @@ uint8_t* DecompressA(FileReader* f, uint32_t decompressedSize, uint32_t compress
                 break;
             }
             if (compressedEnd - f->GetPosition() <= 0) {
-                goto FINISH_COMPRESSA;
+                goto FINISH_DECOMPRESSA;
             }
             if ((controlByte & 0x80) == 0) {
                 *dcmp = f->ReadUInt8();
@@ -73,14 +74,14 @@ uint8_t* DecompressA(FileReader* f, uint32_t decompressedSize, uint32_t compress
                     if (!(compressedEnd - f->GetPosition() <= 0)) {
                         continue;
                     }
-                    goto FINISH_COMPRESSA;
+                    goto FINISH_DECOMPRESSA;
                 }
                 copyBackControl = 0x30 + f->ReadUInt8();
                 copyBackByteCount = 0;
 
             BYTE_READ_COMPRESSA:
                 if (compressedEnd - f->GetPosition() <= 0) {
-                    goto FINISH_COMPRESSA;
+                    goto FINISH_DECOMPRESSA;
                 }
             BREAKCOMPRESSATYPE1:
                 copyBackDistance = 1 + (((copyBackControl & 0xF) << 8) | f->ReadUInt8());
@@ -98,7 +99,7 @@ uint8_t* DecompressA(FileReader* f, uint32_t decompressedSize, uint32_t compress
                 }
             }
             if (decompressedSize == 0) {
-                goto FINISH_COMPRESSA;
+                goto FINISH_DECOMPRESSA;
             }
             controlByte <<= 1;
             --controlByteBits;
@@ -107,7 +108,70 @@ uint8_t* DecompressA(FileReader* f, uint32_t decompressedSize, uint32_t compress
         controlByte = f->ReadUInt8();
         controlByteBits = 8;
     }
-FINISH_COMPRESSA:
-    int a = f->GetPosition();
+FINISH_DECOMPRESSA:
+    return ret;
+}
+
+uint8_t* CompressA(uint8_t* input, uint32_t inputLength, uint32_t* outputLength) {
+    std::vector<uint8_t> compressed;
+    uint32_t controlByteTarget = 0;
+    compressed.push_back(0);
+    uint8_t controlByte = 0;
+    uint8_t controlByteOffs = 3;
+    for (uint32_t i = 0; i < 3 && i < inputLength; ++i) {
+        compressed.push_back(input[i]);
+    }
+    for (uint32_t i = 3; i < inputLength; ) {
+        uint32_t copyBackLength = 0;
+        uint32_t copyBackOffs = 0;
+        for (uint32_t j = 1; j < 4096 && j < i; ++j) {
+            for (uint32_t k = 0; k < 0xF + 3 && i+k < inputLength; ++k) {
+                if (!(input[(i - j) + k] == input[i + k])) {
+                    if (copyBackLength < k) {
+                        copyBackLength = k;
+                        copyBackOffs = j;
+                    }
+                    break;
+                }
+            }
+            if (copyBackLength == 0xF + 3) {
+                break;
+            }
+        }
+        if (copyBackLength < 3) {
+            compressed.push_back(input[i]);
+            ++i;
+        }
+        else {
+            controlByte |= 0x1;
+            copyBackOffs -= 1;
+            compressed.push_back((((copyBackLength - 3) & 0xF) << 4) | (copyBackOffs >> 8));
+            compressed.push_back(copyBackOffs & 0xFF);
+            i += copyBackLength;
+        }
+        if (controlByteOffs == 7) {
+            compressed[controlByteTarget] = controlByte;
+            controlByte = 0;
+            controlByteOffs = 0;
+            controlByteTarget = compressed.size();
+            compressed.push_back(0);
+        }
+        else {
+            controlByte <<= 1;
+            controlByteOffs += 1;
+        }
+    }
+    if (controlByteOffs == 0) {
+        compressed.pop_back();
+    }
+    else {
+        compressed[controlByteTarget] = controlByte << (8 - controlByteOffs);
+    }
+    *outputLength = compressed.size();
+
+    uint8_t *ret = new uint8_t[compressed.size()];
+
+    memcpy(ret, &compressed[0], compressed.size());
+
     return ret;
 }

@@ -1,7 +1,8 @@
 #include "gp2.h"
 #include "CompressA.h"
+#include <sys/stat.h>
 
-#define EXEC_MODE 0
+#define EXEC_MODE 1
 
 void decomp_mode(int argc, char** argv)
 {
@@ -50,7 +51,54 @@ void decomp_mode(int argc, char** argv)
     }
 }
 
+void comp_mode(int argc, char** argv) {
+    if (argc < 1) {
+        printf("Drag a folder or file onto the exe!");
+        return;
+    }
 
+    struct stat sb;
+    if (stat(argv[1], &sb) != 0) {
+        printf("Couldn't find input file or folder?");
+        return;
+    }
+    if (sb.st_mode & S_IFDIR) {
+        FILE* hashKey = fopen("hashkey.bin", "rb");
+        if (hashKey == NULL) {
+            printf("Hashkey file not found!");
+            return;
+        }
+        fread(GP2File::HashKey, sizeof(uint32_t) * 256, 1, hashKey);
+        fclose(hashKey);
+        GP2File* file = GP2File::CreateFromDirectory(argv[1]);
+        char outFileName[512];
+        sprintf(outFileName, "%s.gp2", argv[1]);
+        file->SaveArchive(outFileName);
+    }
+    else {
+        FILE* f = fopen(argv[1], "rb");
+        fseek(f, 0, SEEK_END);
+        uint32_t fileLen = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        uint8_t* uncompressedFile = new uint8_t[fileLen];
+        fread(uncompressedFile, fileLen, 1, f);
+        fclose(f);
+        uint32_t compressedLen;
+        uint8_t *compressedFile = CompressA(uncompressedFile, fileLen, &compressedLen);
+
+        uint32_t compressedHeader = (fileLen << 3) | 1;
+
+        delete[] uncompressedFile;
+
+        char outFileName[512];
+        sprintf(outFileName, "%s.cmp", argv[1]);
+        f = fopen(outFileName, "wb");
+        fwrite(&compressedHeader, 4, 1, f);
+        fwrite(compressedFile, compressedLen, 1, f);
+        fclose(f);
+        delete[] compressedFile;
+    }
+}
 
 int main(int argc, char** argv) {
 #if EXEC_MODE == 0
