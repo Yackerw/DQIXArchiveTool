@@ -198,6 +198,7 @@ bool GP2File::ParseFile() {
         // sanitize and ensure directories
         std::string rel = SanitizePath(files[i]->name);
         std::string full = std::string("export/") + rel;
+        std::printf("export/%s\n", files[i]->name);
         // ensure parent directories exist
         size_t pos = full.find_last_of('/');
         if (pos != std::string::npos) {
