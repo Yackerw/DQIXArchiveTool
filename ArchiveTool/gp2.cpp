@@ -117,7 +117,7 @@ bool GP2File::ParseFile() {
 		fileIters += strlen(fileIters) + 1;
 	}
 
-	bool compressedFiles = false;
+	bool compressedFiles = (header.totalFileSize & 0x10000000) == 0;
 
 	files = new GP2FileStorage * [fileCount];
 	for (uint32_t i = 0; i < fileCount; ++i) {

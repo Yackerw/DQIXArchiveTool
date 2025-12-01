@@ -86,7 +86,7 @@ void comp_mode(int argc, char** argv) {
         uint32_t compressedLen;
         uint8_t *compressedFile = CompressA(uncompressedFile, fileLen, &compressedLen);
 
-        uint32_t compressedHeader = (fileLen << 3) | 1;
+        uint32_t compressedHeader = (fileLen << 8) | 0x10;
 
         delete[] uncompressedFile;
 
@@ -105,8 +105,6 @@ int main(int argc, char** argv) {
     decomp_mode(argc, argv);
 #elif EXEC_MODE == 1
     comp_mode(argc, argv);
-#elif EXEC_MODE == 2
-    comp_mon_mode(argc, argv);
 #endif
 
     return 0;
