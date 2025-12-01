@@ -1,0 +1,64 @@
+name: Build gp2 and Deploy to GitHub Pages
+
+on:
+#  push:
+#    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        run: |
+          sudo apt update
+          sudo apt install -y emscripten
+          emcc -v
+
+      - name: Build WebAssembly (gp2)
+        run: |
+          emcc ArchiveTool/CompressA.cpp \
+               ArchiveTool/CompressB.cpp \
+               ArchiveTool/CompressC.cpp \
+               ArchiveTool/Reader.cpp \
+               ArchiveTool/gp2.cpp \
+               ArchiveTool/wasm_bridge.cpp \
+               -std=c++17 -O3 \
+               -sASSERTIONS=1 \
+               -sENVIRONMENT=web \
+               -sALLOW_MEMORY_GROWTH=1 \
+               -sFILESYSTEM=1 \
+               -sEXPORTED_FUNCTIONS="['_ProcessFile']" \
+               -sEXPORTED_RUNTIME_METHODS="['ccall','cwrap','FS']" \
+               -sNO_EXIT_RUNTIME=1 \
+               -sINVOKE_RUN=0 \
+               -o web/public/gp2.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'web/public'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

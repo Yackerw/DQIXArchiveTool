@@ -1,2 +1,5 @@
 .vs
 x64
+/.idea
+/web/public/gp2.js
+/web/public/gp2.wasm
